@@ -497,8 +497,35 @@ function BarberApp() {
               </div>
 
               <form onSubmit={handleBookingSubmit} className="space-y-12">
+
                 <section className="space-y-6">
-                  <h3 className="text-xl font-bold uppercase italic border-b border-white/10 pb-4">1. Contact Information</h3>
+                  <h3 className="text-xl font-bold uppercase italic border-b border-white/10 pb-4">1. What Would You Like to Book?</h3>
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    {SERVICES.map((service) => (
+                      <button
+                        key={service.name}
+                        type="button"
+                        onClick={() => setBookingForm({...bookingForm, service: service.name})}
+                        className={`p-5 rounded-2xl border transition-all text-left ${
+                          bookingForm.service === service.name
+                            ? 'border-white bg-white/5'
+                            : 'border-white/5 bg-[#111] hover:border-white/20'
+                        }`}
+                      >
+                        <div className="flex justify-between items-start mb-1">
+                          <span className="font-bold uppercase italic text-sm">{service.name}</span>
+                          <span className="font-mono text-sm">{service.price}</span>
+                        </div>
+                        <div className="flex items-center gap-1 text-[10px] text-white/30 uppercase tracking-widest">
+                          <Clock className="w-3 h-3" />{service.duration}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="space-y-6">
+                  <h3 className="text-xl font-bold uppercase italic border-b border-white/10 pb-4">2. Contact Information</h3>
                   <div className="grid md:grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <label className="text-[10px] font-bold uppercase tracking-widest text-white/40 flex items-center gap-2">
@@ -538,7 +565,7 @@ function BarberApp() {
 
                 <section className="space-y-6">
                   <div className="flex justify-between items-end border-b border-white/10 pb-4">
-                    <h3 className="text-xl font-bold uppercase italic">2. Select Date</h3>
+                    <h3 className="text-xl font-bold uppercase italic">3. Select Date</h3>
                     <span className="text-[10px] font-bold uppercase tracking-widest text-white/40 mb-1">
                       {new Date(bookingForm.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
                     </span>
@@ -578,7 +605,7 @@ function BarberApp() {
                 </section>
 
                 <section className="space-y-6">
-                  <h3 className="text-xl font-bold uppercase italic border-b border-white/10 pb-4">3. Select Barber</h3>
+                  <h3 className="text-xl font-bold uppercase italic border-b border-white/10 pb-4">4. Select Barber</h3>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     {BARBERS_DATA.map(barber => (
                       <button
@@ -598,7 +625,7 @@ function BarberApp() {
                     initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
                     className="space-y-6"
                   >
-                    <h3 className="text-xl font-bold uppercase italic border-b border-white/10 pb-4">4. Select Time Slot</h3>
+                    <h3 className="text-xl font-bold uppercase italic border-b border-white/10 pb-4">5. Select Time Slot</h3>
                     <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
                       {TIME_SLOTS.map(slot => {
                         const isTaken = takenSlots[bookingForm.barberId]?.includes(slot);
@@ -624,7 +651,7 @@ function BarberApp() {
 
                 <button
                   type="submit"
-                  disabled={!bookingForm.timeSlot || isSubmitting}
+                  disabled={!bookingForm.service || !bookingForm.timeSlot || isSubmitting}
                   className="w-full bg-white disabled:bg-white/10 disabled:text-white/20 text-black py-6 rounded-2xl text-xl font-black uppercase tracking-tighter hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-3"
                 >
                   {isSubmitting ? (
