@@ -18,27 +18,13 @@ import {
   User,
   Mail,
   Check,
-  LogOut,
-  LogIn,
   Trash2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
-// ─── STEP 1 & 3: Firebase SDK Imports + Initialization ───────────────────────
+// ─── Firebase Storage (images only) ──────────────────────────────────────────
 import { initializeApp } from 'firebase/app';
-import {
-  getAuth,
-  GoogleAuthProvider,
-  signInWithPopup,
-  signOut,
-  onAuthStateChanged,
-  type User as FirebaseUser
-} from 'firebase/auth';
-import {
-  getStorage,
-  ref,
-  getDownloadURL
-} from 'firebase/storage';
+import { getStorage, ref, getDownloadURL } from 'firebase/storage';
 
 // Config is loaded from environment variables.
 // Locally: copy .env.example → .env and fill in your values.
@@ -54,16 +40,12 @@ const firebaseConfig = {
 
 const firebaseConfigured = !!(firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.appId);
 
-let auth: ReturnType<typeof getAuth> | null = null;
 let storage: ReturnType<typeof getStorage> | null = null;
-let googleProvider: GoogleAuthProvider | null = null;
 
 if (firebaseConfigured) {
   try {
     const firebaseApp = initializeApp(firebaseConfig);
-    auth           = getAuth(firebaseApp);
-    storage        = getStorage(firebaseApp);
-    googleProvider = new GoogleAuthProvider();
+    storage = getStorage(firebaseApp);
   } catch (e) {
     console.warn('Firebase initialization failed:', e);
   }
@@ -197,8 +179,6 @@ const TIME_SLOTS = [
   "05:00 PM", "05:30 PM", "06:00 PM", "06:30 PM"
 ];
 
-const ADMIN_EMAIL = 'madilamin098@gmail.com';
-
 export default function App() {
   return (
     <ErrorBoundary>
@@ -208,16 +188,11 @@ export default function App() {
 }
 
 function BarberApp() {
-  const [view, setView] = useState<'landing' | 'booking' | 'admin'>('landing');
+  const [view, setView] = useState<'landing' | 'booking'>('landing');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
-  // ── STEP 4: Firebase auth state (replaces mock user) ────────────────────────
-  const [user, setUser] = useState<FirebaseUser | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
-  const [authError, setAuthError] = useState<string | null>(null);
-
-  // ── STEP 5: Secure image URLs resolved from Firebase Storage ────────────────
+  // ── Secure image URLs resolved from Firebase Storage ────────────────────────
   const [secureImages, setSecureImages] = useState<{
     hero: string;
     about: string;
@@ -250,61 +225,6 @@ function BarberApp() {
     localStorage.setItem('ashors_bookings', JSON.stringify(bookings));
   }, [bookings]);
 
-  // ── STEP 4: onAuthStateChanged — core authorization check ───────────────────
-  useEffect(() => {
-    if (!auth) {
-      setAuthLoading(false);
-      return;
-    }
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      setAuthLoading(false);
-      setAuthError(null);
-
-      if (!firebaseUser) {
-        setUser(null);
-        // Reset to public fallback images when signed out
-        setSecureImages({
-          hero:    FALLBACK_IMAGES.hero,
-          about:   FALLBACK_IMAGES.about,
-          gallery: FALLBACK_IMAGES.gallery
-        });
-        return;
-      }
-
-      // Authorization gate — only the admin email is permitted
-      if (firebaseUser.email !== ADMIN_EMAIL) {
-        await signOut(auth!);          // kick out immediately
-        setUser(null);
-        setAuthError('Unauthorized Email. Only the admin account may sign in.');
-        return;
-      }
-
-      // ✅ Verified admin — set user and pre-fill booking form
-      setUser(firebaseUser);
-      setBookingForm(prev => ({
-        ...prev,
-        name:  firebaseUser.displayName ?? prev.name,
-        email: firebaseUser.email ?? prev.email
-      }));
-
-      // ── STEP 5: Fetch secure signed URLs from Firebase Storage ─────────────
-      if (storage) {
-        try {
-          const [heroUrl, aboutUrl, ...galleryUrls] = await Promise.all([
-            getDownloadURL(ref(storage, STORAGE_IMAGE_PATHS.hero)),
-            getDownloadURL(ref(storage, STORAGE_IMAGE_PATHS.about)),
-            ...STORAGE_IMAGE_PATHS.gallery.map(path => getDownloadURL(ref(storage!, path)))
-          ]);
-          setSecureImages({ hero: heroUrl, about: aboutUrl, gallery: galleryUrls });
-        } catch (err) {
-          // Graceful fallback — keep public Booksy images if Storage paths aren't set up yet
-          console.warn('Firebase Storage: could not load secure images, using public fallbacks.', err);
-        }
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
 
   useEffect(() => {
     if (view === 'booking') window.scrollTo(0, 0);
@@ -328,29 +248,6 @@ function BarberApp() {
       if (element) element.scrollIntoView({ behavior: 'smooth' });
     }
     setIsMenuOpen(false);
-  };
-
-  // ── STEP 2 & 3: Google Sign-In popup ────────────────────────────────────────
-  const handleLogin = async () => {
-    if (!auth || !googleProvider) {
-      setAuthError('Firebase is not configured. Please add your Firebase credentials.');
-      return;
-    }
-    setAuthError(null);
-    try {
-      await signInWithPopup(auth, googleProvider);
-      // onAuthStateChanged handles all state changes after sign-in
-    } catch (err: any) {
-      if (err.code !== 'auth/popup-closed-by-user') {
-        setAuthError('Sign-in failed. Please try again.');
-        console.error('Google sign-in error:', err);
-      }
-    }
-  };
-
-  const handleLogout = async () => {
-    if (!auth) return;
-    await signOut(auth);
   };
 
   const formatDate = (date: Date) => date.toISOString().split('T')[0];
@@ -381,29 +278,52 @@ function BarberApp() {
     return slots;
   }, [bookings, bookingForm.date]);
 
-  const handleBookingSubmit = (e: React.FormEvent) => {
+  const handleBookingSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    setTimeout(() => {
-      const newBooking = {
-        ...bookingForm,
-        id: Math.random().toString(36).substr(2, 9),
-        userId: user?.uid || 'guest',
-        createdAt: new Date().toISOString()
-      };
-      setBookings(prev => [...prev, newBooking]);
-      setIsSubmitting(false);
-      setBookingSuccess(true);
-    }, 1000);
+
+    const barberName = BARBERS_DATA.find(b => b.id === bookingForm.barberId)?.name || bookingForm.barberId;
+    const newBooking = {
+      ...bookingForm,
+      id: Math.random().toString(36).substr(2, 9),
+      barber: barberName,
+      createdAt: new Date().toISOString()
+    };
+
+    setBookings(prev => [...prev, newBooking]);
+
+    const scriptUrl = import.meta.env.VITE_GOOGLE_SCRIPT_URL;
+    if (scriptUrl) {
+      try {
+        await fetch(scriptUrl, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            date: newBooking.date,
+            time: newBooking.timeSlot,
+            service: newBooking.service,
+            name: newBooking.name,
+            email: newBooking.email,
+            phone: newBooking.phone,
+            barber: newBooking.barber,
+            bookedAt: newBooking.createdAt
+          })
+        });
+      } catch (err) {
+        console.warn('Could not send to Google Sheets:', err);
+      }
+    }
+
+    setIsSubmitting(false);
+    setBookingSuccess(true);
   };
 
   const deleteBooking = (id: string) => {
     setBookings(prev => prev.filter(b => b.id !== id));
   };
 
-  const isAdminUser = user?.email === ADMIN_EMAIL;
-
-  if (view === 'admin') {
+  if (false) {
     return (
       <AdminDashboard 
         bookings={bookings} 
@@ -430,43 +350,6 @@ function BarberApp() {
               Back to Home
             </button>
 
-            {/* ── STEP 2: Google Sign-In / avatar + Logout ── */}
-            {user ? (
-              <div className="flex items-center gap-3">
-                {user.photoURL && (
-                  <img
-                    src={user.photoURL}
-                    alt={user.displayName ?? 'Admin'}
-                    className="w-7 h-7 rounded-full border border-white/20"
-                    referrerPolicy="no-referrer"
-                  />
-                )}
-                <button 
-                  onClick={handleLogout}
-                  className="flex items-center gap-2 text-white/30 hover:text-red-400 transition-colors uppercase text-[10px] font-bold tracking-widest"
-                >
-                  <LogOut className="w-3 h-3" />
-                  Logout
-                </button>
-              </div>
-            ) : (
-              <div className="flex flex-col items-end gap-1">
-                <button 
-                  onClick={handleLogin}
-                  disabled={authLoading}
-                  className="flex items-center gap-2 text-white/30 hover:text-white transition-colors uppercase text-[10px] font-bold tracking-widest disabled:opacity-40"
-                >
-                  <LogIn className="w-3 h-3" />
-                  {authLoading ? 'Loading…' : 'Admin Sign In'}
-                </button>
-                {/* ── STEP 4: auth error display (unauthorized email, etc.) ── */}
-                {authError && (
-                  <p className="text-red-400 text-[9px] font-bold uppercase tracking-widest max-w-[220px] text-right leading-tight">
-                    {authError}
-                  </p>
-                )}
-              </div>
-            )}
           </div>
 
           {bookingSuccess ? (
@@ -1023,14 +906,6 @@ function BarberApp() {
           <div className="flex gap-8">
             <button onClick={() => scrollToSection('hero')} aria-label="Scroll to top" className="text-[10px] font-bold uppercase tracking-widest text-white/40 hover:text-white">Back to Top</button>
             <a href="#" aria-label="View Privacy Policy" className="text-[10px] font-bold uppercase tracking-widest text-white/40 hover:text-white">Privacy Policy</a>
-            {isAdminUser && (
-              <button 
-                onClick={() => setView('admin')}
-                className="text-[10px] font-bold uppercase tracking-widest text-white/40 hover:text-white"
-              >
-                Admin Panel
-              </button>
-            )}
           </div>
         </div>
       </footer>
