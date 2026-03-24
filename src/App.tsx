@@ -295,20 +295,19 @@ function BarberApp() {
     const scriptUrl = import.meta.env.VITE_GOOGLE_SCRIPT_URL;
     if (scriptUrl) {
       try {
-        await fetch(scriptUrl, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            date: newBooking.date,
-            time: newBooking.timeSlot,
-            service: newBooking.service,
-            name: newBooking.name,
-            email: newBooking.email,
-            phone: newBooking.phone,
-            barber: newBooking.barber,
-            bookedAt: newBooking.createdAt
-          })
+        const params = new URLSearchParams({
+          date: newBooking.date,
+          time: newBooking.timeSlot,
+          service: newBooking.service,
+          name: newBooking.name,
+          email: newBooking.email,
+          phone: newBooking.phone,
+          barber: newBooking.barber,
+          bookedAt: newBooking.createdAt
+        });
+        await fetch(`${scriptUrl}?${params.toString()}`, {
+          method: 'GET',
+          mode: 'no-cors'
         });
       } catch (err) {
         console.warn('Could not send to Google Sheets:', err);
