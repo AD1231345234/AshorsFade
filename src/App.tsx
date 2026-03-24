@@ -52,10 +52,22 @@ const firebaseConfig = {
   appId:             import.meta.env.VITE_FIREBASE_APP_ID
 };
 
-const firebaseApp    = initializeApp(firebaseConfig);
-const auth           = getAuth(firebaseApp);
-const storage        = getStorage(firebaseApp);
-const googleProvider = new GoogleAuthProvider();
+const firebaseConfigured = !!(firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.appId);
+
+let auth: ReturnType<typeof getAuth> | null = null;
+let storage: ReturnType<typeof getStorage> | null = null;
+let googleProvider: GoogleAuthProvider | null = null;
+
+if (firebaseConfigured) {
+  try {
+    const firebaseApp = initializeApp(firebaseConfig);
+    auth           = getAuth(firebaseApp);
+    storage        = getStorage(firebaseApp);
+    googleProvider = new GoogleAuthProvider();
+  } catch (e) {
+    console.warn('Firebase initialization failed:', e);
+  }
+}
 // ─────────────────────────────────────────────────────────────────────────────
 
 // STEP 5: Firebase Storage paths for your real barbershop images.
@@ -240,6 +252,10 @@ function BarberApp() {
 
   // ── STEP 4: onAuthStateChanged — core authorization check ───────────────────
   useEffect(() => {
+    if (!auth) {
+      setAuthLoading(false);
+      return;
+    }
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setAuthLoading(false);
       setAuthError(null);
@@ -257,7 +273,7 @@ function BarberApp() {
 
       // Authorization gate — only the admin email is permitted
       if (firebaseUser.email !== ADMIN_EMAIL) {
-        await signOut(auth);          // kick out immediately
+        await signOut(auth!);          // kick out immediately
         setUser(null);
         setAuthError('Unauthorized Email. Only the admin account may sign in.');
         return;
@@ -272,16 +288,18 @@ function BarberApp() {
       }));
 
       // ── STEP 5: Fetch secure signed URLs from Firebase Storage ─────────────
-      try {
-        const [heroUrl, aboutUrl, ...galleryUrls] = await Promise.all([
-          getDownloadURL(ref(storage, STORAGE_IMAGE_PATHS.hero)),
-          getDownloadURL(ref(storage, STORAGE_IMAGE_PATHS.about)),
-          ...STORAGE_IMAGE_PATHS.gallery.map(path => getDownloadURL(ref(storage, path)))
-        ]);
-        setSecureImages({ hero: heroUrl, about: aboutUrl, gallery: galleryUrls });
-      } catch (err) {
-        // Graceful fallback — keep public Booksy images if Storage paths aren't set up yet
-        console.warn('Firebase Storage: could not load secure images, using public fallbacks.', err);
+      if (storage) {
+        try {
+          const [heroUrl, aboutUrl, ...galleryUrls] = await Promise.all([
+            getDownloadURL(ref(storage, STORAGE_IMAGE_PATHS.hero)),
+            getDownloadURL(ref(storage, STORAGE_IMAGE_PATHS.about)),
+            ...STORAGE_IMAGE_PATHS.gallery.map(path => getDownloadURL(ref(storage!, path)))
+          ]);
+          setSecureImages({ hero: heroUrl, about: aboutUrl, gallery: galleryUrls });
+        } catch (err) {
+          // Graceful fallback — keep public Booksy images if Storage paths aren't set up yet
+          console.warn('Firebase Storage: could not load secure images, using public fallbacks.', err);
+        }
       }
     });
 
@@ -314,6 +332,10 @@ function BarberApp() {
 
   // ── STEP 2 & 3: Google Sign-In popup ────────────────────────────────────────
   const handleLogin = async () => {
+    if (!auth || !googleProvider) {
+      setAuthError('Firebase is not configured. Please add your Firebase credentials.');
+      return;
+    }
     setAuthError(null);
     try {
       await signInWithPopup(auth, googleProvider);
@@ -327,6 +349,7 @@ function BarberApp() {
   };
 
   const handleLogout = async () => {
+    if (!auth) return;
     await signOut(auth);
   };
 
