@@ -1,0 +1,32 @@
+node_modules/
+dist/
+.env
+.env.local
+.env.*.local
+.vscode/
+.DS_Store
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment variables — NEVER commit secrets
+.env
+.env.local
+.env.*.local
+
+# Editor
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Vite cache
+.vite/

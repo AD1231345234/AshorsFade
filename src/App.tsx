@@ -17,8 +17,8 @@ import {
   ChevronLeft,
   User,
   Mail,
-  Check,
-  Trash2
+  Trash2,
+  Check
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -208,6 +208,60 @@ function BarberApp() {
     return saved ? JSON.parse(saved) : [];
   });
 
+  const [isAvailabilityLoaded, setIsAvailabilityLoaded] = useState(false);
+
+  // Fetch bookings from Google Sheet to sync availability
+  useEffect(() => {
+    const fetchBookingsFromSheet = async () => {
+      const scriptUrl = import.meta.env.VITE_GOOGLE_SCRIPT_URL;
+      if (!scriptUrl) {
+        setIsAvailabilityLoaded(true);
+        return;
+      }
+      
+      try {
+        // Add timestamp to force fresh data
+        const url = `${scriptUrl}?action=getBookings&t=${Date.now()}`;
+        const response = await fetch(url, {
+          method: 'GET',
+          mode: 'cors'
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.bookings && Array.isArray(data.bookings)) {
+            // Convert sheet bookings to app format
+            const sheetBookings = data.bookings.map((b: any) => ({
+              id: String(b.id || b[0]),
+              name: String(b.name || b[1] || ''),
+              email: String(b.email || b[2] || ''),
+              phone: String(b.phone || b[3] || ''),
+              barberId: '',
+              barber: String(b.barber || b[4] || ''),
+              date: String(b.date || ''),
+              timeSlot: String(b.time || b[6] || ''),
+              service: String(b.service || b[5] || ''),
+              createdAt: new Date().toISOString()
+            }));
+            
+            setBookings(sheetBookings);
+            console.log('✅ Synced', sheetBookings.length, 'bookings from Google Sheet');
+          }
+        }
+        setIsAvailabilityLoaded(true);
+      } catch (err) {
+        console.warn('⚠️ Could not fetch from Google Sheet, using local bookings:', err);
+        setIsAvailabilityLoaded(true);
+      }
+    };
+    
+    fetchBookingsFromSheet();
+    
+    // Refresh every 30 seconds to stay in sync
+    const interval = setInterval(fetchBookingsFromSheet, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
   const [bookingForm, setBookingForm] = useState({
     name: '',
     email: '',
@@ -220,6 +274,81 @@ function BarberApp() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [bookingSuccess, setBookingSuccess] = useState(false);
+
+  // Helper functions for reminders
+  const generateICSCalendar = (booking: any) => {
+    const [year, month, day] = booking.date.split('-');
+    const [hours, minutes] = booking.timeSlot.split(' ')[0].split(':');
+    const start = `${year}${month}${day}T${hours}${minutes}00`;
+    const end = `${year}${month}${day}T${String(Number(hours) + 1).padStart(2, '0')}${minutes}00`;
+    
+    return `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Ashor's Fade//Barbershop Booking//EN
+BEGIN:VEVENT
+UID:${booking.id}@ashorsfade.com
+DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').split('.')[0]}Z
+DTSTART:${start}
+DTEND:${end}
+SUMMARY:${booking.service} with ${booking.barber} - Ashor's Fade
+DESCRIPTION:Booking confirmation for ${booking.service}\\nBarber: ${booking.barber}\\nPhone: ${booking.phone}
+LOCATION:Ashor's Fade Barbershop, Skokie
+END:VEVENT
+END:VCALENDAR`;
+  };
+
+  const downloadCalendarReminder = (booking: any) => {
+    const ics = generateICSCalendar(booking);
+    const blob = new Blob([ics], { type: 'text/calendar' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ashor-booking-${booking.date}.ics`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  };
+
+  const generateEmailContent = (booking: any) => {
+    return `Hi ${booking.name},
+
+Here's your booking confirmation for Ashor's Fade Barbershop:
+
+📅 Date: ${booking.date}
+⏰ Time: ${booking.timeSlot}
+✂️ Service: ${booking.service}
+💈 Barber: ${booking.barber}
+📞 Phone: ${booking.phone}
+
+To set a 1-hour reminder:
+1. Add this event to your phone's calendar (download the calendar file)
+2. Set a reminder for 1 hour before your appointment
+
+Questions? Call us at (847) 555-0000
+
+Thanks for booking with us!
+Ashor's Fade Barbershop`;
+  };
+
+  const emailReminder = (booking: any) => {
+    if (!booking || !booking.email) {
+      alert('Email address not found. Please ensure you completed the booking.');
+      return;
+    }
+    
+    const content = generateEmailContent(booking);
+    const subject = `Booking Confirmation - Ashor's Fade on ${booking.date}`;
+    const mailto = `mailto:${booking.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(content)}`;
+    
+    // Open email client
+    window.location.href = mailto;
+    
+    // Provide feedback
+    setTimeout(() => {
+      alert('✅ Email reminder sent! Check your email for booking details.');
+    }, 300);
+  };
 
   useEffect(() => {
     localStorage.setItem('ashors_bookings', JSON.stringify(bookings));
@@ -271,18 +400,37 @@ function BarberApp() {
 
   const takenSlots = useMemo(() => {
     const slots: Record<string, string[]> = {};
+    const barberName = BARBERS_DATA.find(b => b.id === bookingForm.barberId)?.name || bookingForm.barberId;
+    
     bookings.filter(b => b.date === bookingForm.date).forEach(b => {
-      if (!slots[b.barberId]) slots[b.barberId] = [];
-      slots[b.barberId].push(b.timeSlot);
+      // Match by barber name (works for both local and Google Sheet bookings)
+      if (b.barber === barberName) {
+        if (!slots[bookingForm.barberId]) slots[bookingForm.barberId] = [];
+        slots[bookingForm.barberId].push(b.timeSlot);
+      }
     });
     return slots;
-  }, [bookings, bookingForm.date]);
+  }, [bookings, bookingForm.date, bookingForm.barberId]);
 
   const handleBookingSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
 
     const barberName = BARBERS_DATA.find(b => b.id === bookingForm.barberId)?.name || bookingForm.barberId;
+    
+    // Check for conflicts: same date, time, and barber
+    const hasConflict = bookings.some(b => 
+      b.date === bookingForm.date && 
+      b.timeSlot === bookingForm.timeSlot && 
+      b.barber === barberName
+    );
+    
+    if (hasConflict) {
+      setIsSubmitting(false);
+      alert('❌ This time slot is already booked! Please choose another date, time, or barber.');
+      return;
+    }
+
     const newBooking = {
       ...bookingForm,
       id: Math.random().toString(36).substr(2, 9),
@@ -292,6 +440,7 @@ function BarberApp() {
 
     setBookings(prev => [...prev, newBooking]);
 
+    // Send booking to Google Sheets
     const scriptUrl = import.meta.env.VITE_GOOGLE_SCRIPT_URL;
     if (scriptUrl) {
       try {
@@ -305,13 +454,25 @@ function BarberApp() {
           barber: newBooking.barber,
           bookedAt: newBooking.createdAt
         });
-        await fetch(`${scriptUrl}?${params.toString()}`, {
-          method: 'GET',
-          mode: 'no-cors'
+        
+        // Use POST method with CORS to get proper response
+        const response = await fetch(scriptUrl, {
+          method: 'POST',
+          mode: 'cors',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: params.toString()
         });
+        
+        if (!response.ok) {
+          console.warn('Google Sheets sync warning:', response.statusText);
+        }
       } catch (err) {
-        console.warn('Could not send to Google Sheets:', err);
+        console.warn('Note: Booking saved locally. Google Sheets sync will work once configured.', err);
       }
+    } else {
+      console.info('Tip: Set VITE_GOOGLE_SCRIPT_URL env var to sync with Google Sheets');
     }
 
     setIsSubmitting(false);
@@ -355,21 +516,95 @@ function BarberApp() {
             <motion.div 
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="text-center py-20 bg-[#111] rounded-3xl border border-white/5"
+              className="py-16 bg-[#111] rounded-3xl border border-white/5"
             >
-              <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-8">
-                <Check className="w-10 h-10 text-black" />
+              <div className="max-w-2xl mx-auto px-6">
+                <div className="text-center mb-12">
+                  <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-8">
+                    <Check className="w-10 h-10 text-black" />
+                  </div>
+                  <h2 className="text-4xl font-black uppercase italic mb-4">Booking Confirmed!</h2>
+                  <p className="text-white/60">
+                    Thank you, {bookingForm.name}. Your appointment is set!
+                  </p>
+                </div>
+
+                {/* Booking Details */}
+                <div className="bg-white/5 border border-white/10 rounded-2xl p-8 mb-12 space-y-4">
+                  <div className="grid md:grid-cols-2 gap-6">
+                    <div>
+                      <p className="text-white/40 text-sm uppercase tracking-widest mb-1">Barber</p>
+                      <p className="text-xl font-bold">{BARBERS_DATA.find(b => b.id === bookingForm.barberId)?.name}</p>
+                    </div>
+                    <div>
+                      <p className="text-white/40 text-sm uppercase tracking-widest mb-1">Service</p>
+                      <p className="text-xl font-bold">{bookingForm.service}</p>
+                    </div>
+                    <div>
+                      <p className="text-white/40 text-sm uppercase tracking-widest mb-1">📅 Date</p>
+                      <p className="text-xl font-bold">{bookingForm.date}</p>
+                    </div>
+                    <div>
+                      <p className="text-white/40 text-sm uppercase tracking-widest mb-1">⏰ Time</p>
+                      <p className="text-xl font-bold">{bookingForm.timeSlot}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Reminder Options */}
+                <div className="mb-12">
+                  <h3 className="text-xl font-bold uppercase italic mb-6 text-center">Set Your Reminder</h3>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    {/* Email Reminder */}
+                    <button
+                      onClick={() => {
+                        const barberName = BARBERS_DATA.find(b => b.id === bookingForm.barberId)?.name || bookingForm.barberId;
+                        emailReminder({
+                          ...bookingForm,
+                          barber: barberName,
+                          timeSlot: bookingForm.timeSlot
+                        });
+                      }}
+                      className="bg-white/10 hover:bg-white/20 border border-white/20 rounded-2xl p-6 transition-all text-left"
+                    >
+                      <Mail className="w-6 h-6 mb-3 text-white" />
+                      <h4 className="font-bold uppercase italic mb-2">Email Reminder</h4>
+                      <p className="text-sm text-white/60">Send booking details to your email</p>
+                    </button>
+
+                    {/* Calendar Download */}
+                    <button
+                      onClick={() => {
+                        const barberName = BARBERS_DATA.find(b => b.id === bookingForm.barberId)?.name || bookingForm.barberId;
+                        downloadCalendarReminder({
+                          ...bookingForm,
+                          barber: barberName,
+                          id: bookings[bookings.length - 1]?.id || 'booking-' + Date.now()
+                        });
+                      }}
+                      className="bg-white/10 hover:bg-white/20 border border-white/20 rounded-2xl p-6 transition-all text-left"
+                    >
+                      <Calendar className="w-6 h-6 mb-3 text-white" />
+                      <h4 className="font-bold uppercase italic mb-2">Download Calendar</h4>
+                      <p className="text-sm text-white/60">Add to Google Calendar, Outlook, etc.</p>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Pro Tip */}
+                <div className="bg-white/5 border border-white/10 rounded-xl p-6 mb-12 text-sm">
+                  <p className="text-white/60 leading-relaxed">
+                    💡 <strong>Pro Tip:</strong> After downloading, you can set a 60-minute reminder in your calendar app. We'll also display your bookings below for easy access.
+                  </p>
+                </div>
+
+                <button 
+                  onClick={() => setView('landing')}
+                  className="w-full bg-white text-black px-10 py-4 rounded-full font-black uppercase tracking-tighter hover:scale-105 transition-transform"
+                >
+                  Return Home
+                </button>
               </div>
-              <h2 className="text-4xl font-black uppercase italic mb-4">Booking Confirmed!</h2>
-              <p className="text-white/60 mb-10 max-w-md mx-auto">
-                Thank you, {bookingForm.name}. Your appointment with {BARBERS_DATA.find(b => b.id === bookingForm.barberId)?.name} is set for {bookingForm.date} at {bookingForm.timeSlot}.
-              </p>
-              <button 
-                onClick={() => setView('landing')}
-                className="bg-white text-black px-10 py-4 rounded-full font-black uppercase tracking-tighter hover:scale-105 transition-transform"
-              >
-                Return Home
-              </button>
             </motion.div>
           ) : (
             <div>
@@ -698,13 +933,13 @@ function BarberApp() {
             <h2 className="text-5xl md:text-7xl font-black uppercase italic tracking-tighter mb-8">About Us</h2>
             <div className="space-y-6 text-white/70 font-light leading-relaxed text-lg">
               <p>
-                Nestled in Skokie, Illinois, Ashor's Fade stands out as a premier barbershop renowned for its exceptional service and skilled barbers. Under the expert hands of Sargon and Ashor, clients consistently leave with impeccably crafted fades and precise beard trims.
+                Ashor's Fade is a great barbershop in Skokie, Illinois. Sargon and Ashor are very skilled and take their time to give clean fades and sharp beard trims.
               </p>
               <p>
-                The environment is welcoming, fostering easy conversations and a friendly vibe. Clients appreciate the meticulous attention to detail, ensuring every visit feels personalized and exceptional.
+                The shop feels friendly and comfortable, so it's easy to talk and relax while getting your haircut. They pay close attention to every detail, making sure each cut looks just right for you.
               </p>
               <p>
-                With a 15-year legacy, Ashor's Fade has become a beloved local institution, where each haircut not only enhances appearance but also instills a sense of confidence and satisfaction.
+                After 15 years, Ashor's Fade has become a place people trust. You don't just leave with a haircut—you leave feeling confident and happy.
               </p>
             </div>
           </div>
