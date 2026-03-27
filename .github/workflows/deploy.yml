@@ -8,6 +8,10 @@ on: # Event trigger for the workflow
 jobs:
   deploy:
     runs-on: ubuntu-latest # Run on Ubuntu virtual machine
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
     steps:
       - name: Checkout # Clone the repository
         uses: actions/checkout@v4

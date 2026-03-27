@@ -204,8 +204,16 @@ function BarberApp() {
   });
 
   const [bookings, setBookings] = useState<any[]>(() => {
-    const saved = localStorage.getItem('ashors_bookings');
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem('ashors_bookings');
+      if (!saved) return [];
+      const parsed = JSON.parse(saved);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+      console.warn('Failed to parse ashors_bookings from localStorage, resetting:', error);
+      localStorage.removeItem('ashors_bookings');
+      return [];
+    }
   });
 
   const [isAvailabilityLoaded, setIsAvailabilityLoaded] = useState(false);
@@ -354,7 +362,6 @@ Ashor's Fade Barbershop`;
     localStorage.setItem('ashors_bookings', JSON.stringify(bookings));
   }, [bookings]);
 
-
   useEffect(() => {
     if (view === 'booking') window.scrollTo(0, 0);
   }, [view]);
@@ -482,6 +489,14 @@ Ashor's Fade Barbershop`;
   const deleteBooking = (id: string) => {
     setBookings(prev => prev.filter(b => b.id !== id));
   };
+
+  if (!isAvailabilityLoaded) {
+    return (
+      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+        <span className="text-lg font-bold">Loading Ashor's Fade…</span>
+      </div>
+    );
+  }
 
   if (false) {
     return (
