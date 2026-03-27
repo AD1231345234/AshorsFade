@@ -5,8 +5,9 @@ import {defineConfig, loadEnv} from 'vite';
 
 export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
+  const basePath = env.VITE_BASE_PATH || (mode === 'production' ? '/' : '/');
   return {
-    base: mode === 'production' ? '/AshorsFade/' : '/',
+    base: basePath,
     plugins: [react(), tailwindcss()],
     define: {
       ...(env.GEMINI_API_KEY && { 'import.meta.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY) }),
