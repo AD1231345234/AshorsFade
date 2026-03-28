@@ -5,7 +5,9 @@ import {defineConfig, loadEnv} from 'vite';
 
 export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
-  const basePath = env.VITE_BASE_PATH || (mode === 'production' ? '/' : '/');
+  // Use relative base in production so assets load correctly on GitHub Pages
+  // (which may serve the site from a subpath). You can override with VITE_BASE_PATH.
+  const basePath = env.VITE_BASE_PATH || (mode === 'production' ? './' : '/');
   return {
     base: basePath,
     plugins: [react(), tailwindcss()],
