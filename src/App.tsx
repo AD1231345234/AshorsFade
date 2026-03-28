@@ -218,10 +218,29 @@ function BarberApp() {
 
   const [isAvailabilityLoaded, setIsAvailabilityLoaded] = useState(false);
 
+  // Runtime config (loaded from /config.json when deployed to GitHub Pages)
+  const [runtimeConfig, setRuntimeConfig] = useState<{ VITE_GOOGLE_SCRIPT_URL?: string }>({});
+
+  useEffect(() => {
+    // Try to load runtime config so deployments that don't support build-time env vars (GitHub Pages)
+    // can still configure the Google Apps Script URL without rebuilding.
+    (async () => {
+      try {
+        const resp = await fetch('/config.json', { cache: 'no-store' });
+        if (resp.ok) {
+          const data = await resp.json();
+          setRuntimeConfig(data || {});
+        }
+      } catch (e) {
+        // Silent - fallback to build-time env vars if config.json unavailable
+      }
+    })();
+  }, []);
+
   // Fetch bookings from Google Sheet to sync availability
   useEffect(() => {
     const fetchBookingsFromSheet = async () => {
-      const scriptUrl = import.meta.env.VITE_GOOGLE_SCRIPT_URL;
+      const scriptUrl = runtimeConfig?.VITE_GOOGLE_SCRIPT_URL || import.meta.env.VITE_GOOGLE_SCRIPT_URL;
       if (!scriptUrl) {
         setIsAvailabilityLoaded(true);
         return;
@@ -448,7 +467,7 @@ Ashor's Fade Barbershop`;
     setBookings(prev => [...prev, newBooking]);
 
     // Send booking to Google Sheets
-    const scriptUrl = import.meta.env.VITE_GOOGLE_SCRIPT_URL;
+    const scriptUrl = runtimeConfig?.VITE_GOOGLE_SCRIPT_URL || import.meta.env.VITE_GOOGLE_SCRIPT_URL;
     if (scriptUrl) {
       try {
         const params = new URLSearchParams({
@@ -479,7 +498,7 @@ Ashor's Fade Barbershop`;
         console.warn('Note: Booking saved locally. Google Sheets sync will work once configured.', err);
       }
     } else {
-      console.info('Tip: Set VITE_GOOGLE_SCRIPT_URL env var to sync with Google Sheets');
+      console.info('Tip: Add /config.json with VITE_GOOGLE_SCRIPT_URL or set VITE_GOOGLE_SCRIPT_URL at build time to sync with Google Sheets');
     }
 
     setIsSubmitting(false);
