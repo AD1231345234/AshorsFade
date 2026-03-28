@@ -1,0 +1,153 @@
+/* src/components/DailySpreadsheet.css */
+.spreadsheet-container {
+  padding: 30px;
+  background: #111;
+  border-radius: 8px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.spreadsheet-header {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.spreadsheet-header h1 {
+  font-size: 28px;
+  color: #ffffff;
+  margin: 0;
+  text-transform: uppercase;
+  font-weight: bold;
+}
+
+.spreadsheet-header p {
+  color: #999;
+  font-size: 16px;
+  margin: 8px 0 0 0;
+}
+
+.add-row-form {
+  background: #1a1a1a;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 30px;
+  border: 1px solid #333;
+}
+
+.add-row-form h3 {
+  margin-top: 0;
+  color: #ffffff;
+  text-transform: uppercase;
+  font-size: 16px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.form-grid input,
+.form-grid button {
+  padding: 12px;
+  border: 1px solid #333;
+  border-radius: 4px;
+  font-size: 14px;
+  background: #111;
+  color: #ffffff;
+}
+
+.form-grid input::placeholder {
+  color: #666;
+}
+
+.form-grid input:focus {
+  outline: none;
+  border-color: #ffffff;
+  background: #1a1a1a;
+}
+
+.form-grid button {
+  background: #3498db;
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-weight: bold;
+  transition: background 0.3s;
+  text-transform: uppercase;
+}
+
+.form-grid button:hover {
+  background: #2980b9;
+}
+
+.spreadsheet-table {
+  background: #1a1a1a;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #333;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+thead {
+  background: #2c3e50;
+  color: white;
+}
+
+th {
+  padding: 16px;
+  text-align: left;
+  font-weight: bold;
+  font-size: 14px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+td {
+  padding: 14px 16px;
+  border-bottom: 1px solid #333;
+  font-size: 14px;
+  color: #ffffff;
+}
+
+tbody tr {
+  transition: background 0.2s;
+}
+
+tbody tr:hover {
+  background: #222;
+}
+
+.status-pending {
+  border-left: 4px solid #f39c12;
+}
+
+.status-completed {
+  border-left: 4px solid #27ae60;
+  background: rgba(39, 174, 96, 0.1);
+}
+
+.status-cancelled {
+  border-left: 4px solid #e74c3c;
+  background: rgba(231, 76, 60, 0.1);
+  opacity: 0.7;
+}
+
+.status-select {
+  padding: 6px 10px;
+  border: 1px solid #333;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  background: #111;
+  color: #ffffff;
+}
+
+.status-select:focus {
+  outline: none;
+  border-color: #3498db;
+}
