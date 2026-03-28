@@ -21,7 +21,6 @@ import {
   Check
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { DailySpreadsheet } from './components/DailySpreadsheet';
 
 // ΓöÇΓöÇΓöÇ Firebase Storage (images only) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 import { initializeApp } from 'firebase/app';
@@ -189,7 +188,7 @@ export default function App() {
 }
 
 function BarberApp() {
-  const [view, setView] = useState<'landing' | 'booking' | 'spreadsheet'>('landing');
+  const [view, setView] = useState<'landing' | 'booking'>('landing');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
@@ -528,23 +527,6 @@ Ashor's Fade Barbershop`;
     );
   }
 
-  if (view === 'spreadsheet') {
-    return (
-      <div className="min-h-screen bg-black text-white font-sans selection:bg-white selection:text-black py-20 px-6">
-        <div className="max-w-7xl mx-auto">
-          <button 
-            onClick={() => setView('landing')}
-            className="flex items-center gap-2 text-white/50 hover:text-white transition-colors uppercase text-xs font-bold tracking-widest mb-12"
-          >
-            <ChevronLeft className="w-4 h-4" />
-            Back to Home
-          </button>
-          <DailySpreadsheet />
-        </div>
-      </div>
-    );
-  }
-
   if (view === 'booking') {
     return (
       <div className="min-h-screen bg-black text-white font-sans selection:bg-white selection:text-black py-20 px-6">
@@ -860,13 +842,6 @@ Ashor's Fade Barbershop`;
               </button>
             ))}
             <button 
-              onClick={() => setView('spreadsheet')}
-              aria-label="View daily schedule"
-              className="text-sm font-medium uppercase tracking-widest hover:text-white transition-colors"
-            >
-              Schedule
-            </button>
-            <button 
               onClick={() => setView('booking')}
               aria-label="Book an appointment"
               className="bg-white text-black px-6 py-2 rounded-full text-sm font-bold uppercase tracking-tighter hover:scale-105 transition-transform"
@@ -896,13 +871,6 @@ Ashor's Fade Barbershop`;
                   {item}
                 </button>
               ))}
-              <button 
-                onClick={() => { setView('spreadsheet'); setIsMenuOpen(false); }}
-                aria-label="View daily schedule"
-                className="text-2xl font-bold uppercase tracking-widest text-white/60"
-              >
-                Daily Schedule
-              </button>
               <button 
                 onClick={() => { setView('booking'); setIsMenuOpen(false); }}
                 aria-label="Book an appointment"
